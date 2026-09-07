@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    background: rgba(110, 168, 255, 0.35);
+    color: #ffffff;
+  }
+
+  /* Table row hover */
+  tbody tr:hover {
+    background-color: rgb(26 37 67 / 0.5);
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-bg-card border border-line rounded-xl shadow-card;
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-bg-hover transition-colors disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn border-brand-muted bg-brand-soft text-ink hover:bg-brand-muted/40;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-md border border-line bg-bg-soft px-2 py-0.5 text-[11px] font-medium text-ink-muted;
+  }
+  .label {
+    @apply text-xs uppercase tracking-wider text-ink-faint font-medium;
+  }
+  .kpi-value {
+    @apply text-3xl font-semibold text-ink tracking-tight;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+}
