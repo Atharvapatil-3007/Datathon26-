@@ -135,20 +135,53 @@ class ProfilingEngine:
     # ------------------------------------------------------------------
     def _profile_columns(self, df: pd.DataFrame) -> List[ColumnProfile]:
         total = len(df)
+        # Identify the first date / datetime column ONCE; every numerical
+        # column will use it as its temporal anchor for `latest_value` (F-05).
+        date_series = self._first_date_series(df)
+
         profiles: List[ColumnProfile] = []
         for i in range(df.shape[1]):
             name = str(df.columns[i])
             col = df.iloc[:, i]
             try:
-                profile = self._profile_one(name, col, total)
+                profile = self._profile_one(name, col, total, date_series=date_series)
             except Exception as exc:  # noqa: BLE001
                 log.warning("column_profile_failed", column=name, error=str(exc))
                 profile = _minimal_profile(name, col, total)
             profiles.append(profile)
         return profiles
 
+    def _first_date_series(self, df: pd.DataFrame) -> Optional[pd.Series]:
+        """Return the first column that looks date/datetime-shaped."""
+        from pandas.api import types as ptypes
+
+        for i in range(df.shape[1]):
+            col = df.iloc[:, i]
+            if ptypes.is_datetime64_any_dtype(col):
+                return col
+        # No native datetime dtype \u2014 try a lightweight sniff on object cols.
+        for i in range(df.shape[1]):
+            col = df.iloc[:, i]
+            if not ptypes.is_object_dtype(col) and not ptypes.is_string_dtype(col):
+                continue
+            sample = col.dropna().head(20)
+            if sample.empty:
+                continue
+            try:
+                parsed = pd.to_datetime(sample, errors="coerce", format="mixed")
+            except Exception:  # noqa: BLE001
+                continue
+            if parsed.notna().mean() >= 0.9:
+                return pd.to_datetime(col, errors="coerce", format="mixed")
+        return None
+
     def _profile_one(
-        self, name: str, series: pd.Series, total_rows: int
+        self,
+        name: str,
+        series: pd.Series,
+        total_rows: int,
+        *,
+        date_series: Optional[pd.Series] = None,
     ) -> ColumnProfile:
         detection = detect_column_type(name, series)
         non_null = series.dropna()
@@ -172,7 +205,7 @@ class ProfilingEngine:
 
         cls = detection.column_class
         if cls == ColumnClass.NUMERICAL:
-            stats_payload = _stats.numerical_stats(series)
+            stats_payload = _stats.numerical_stats(series, date_series=date_series)
             dist_payload = _dist.numerical_distribution(series)
             outliers_payload = _out.detect_outliers(series)
         elif cls == ColumnClass.CATEGORICAL:

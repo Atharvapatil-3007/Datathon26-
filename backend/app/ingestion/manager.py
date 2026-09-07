@@ -377,7 +377,9 @@ class IngestionManager:
             dataset.add_warning(f"Phase 2 profiling could not be completed: {exc}")
             return None
 
-    def reprofile_dataset(self, dataset_id: str) -> Dict[str, Any]:
+    def reprofile_dataset(
+        self, dataset_id: str, *, user_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Re-hydrate a persisted dataset from Supabase Storage and re-profile.
 
         Used when the caller wants a fresh profile — e.g. after schema tweaks
@@ -386,7 +388,7 @@ class IngestionManager:
         from app.ingestion.detector import detect_format  # local import
         from app.profiling.engine import get_profiling_engine
 
-        row = self.supabase.get_dataset(dataset_id)  # raises if missing
+        row = self.supabase.get_dataset(dataset_id, user_id=user_id)  # raises if missing
         storage_path = row.get("storage_path")
         if not storage_path:
             raise InvalidDatasetError(
@@ -433,22 +435,31 @@ class IngestionManager:
     # ======================================================================
     # Read / delete pass-throughs
     # ======================================================================
-    def get_dataset_summary(self, dataset_id: str) -> Optional[Dict[str, Any]]:
+    def get_dataset_summary(
+        self, dataset_id: str, *, user_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """Return the row for `dataset_id` or None if it doesn't exist.
 
         Softens the underlying service's raise-on-missing behaviour so
-        callers can use the "if row is None" idiom.
+        callers can use the "if row is None" idiom. Passing ``user_id``
+        also 404s rows belonging to a different owner (F-01).
         """
         try:
-            return self.supabase.get_dataset(dataset_id)
+            return self.supabase.get_dataset(dataset_id, user_id=user_id)
         except DatasetNotFoundError:
             return None
 
-    def list_datasets(self, *, limit: int = 100, offset: int = 0):
-        return self.supabase.list_datasets(limit=limit, offset=offset)
+    def list_datasets(
+        self, *, limit: int = 100, offset: int = 0, user_id: Optional[str] = None
+    ):
+        return self.supabase.list_datasets(
+            limit=limit, offset=offset, user_id=user_id
+        )
 
-    def delete_dataset(self, dataset_id: str) -> None:
-        self.supabase.delete_dataset(dataset_id)
+    def delete_dataset(
+        self, dataset_id: str, *, user_id: Optional[str] = None
+    ) -> None:
+        self.supabase.delete_dataset(dataset_id, user_id=user_id)
 
     # ======================================================================
     # Internals

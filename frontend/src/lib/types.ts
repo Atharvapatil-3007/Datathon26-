@@ -533,3 +533,148 @@ export interface AnalysisOptionsResponse {
 }
 
 
+
+// ===========================================================================
+// Chatbot - Dataset Intelligence Assistant
+// ===========================================================================
+export type ChatRole = "user" | "assistant" | "system";
+
+export type ChatIntent =
+  | "dataset_overview"
+  | "column_lookup"
+  | "data_quality"
+  | "period_range"
+  | "metric_lookup"
+  | "ratio_lookup"
+  | "period_comparison"
+  | "trend_analysis"
+  | "financial_health"
+  | "risk_analysis"
+  | "strength_analysis"
+  | "opportunity_analysis"
+  | "weakness_analysis"
+  | "recommendation"
+  | "explanation"
+  | "merger_overview"
+  | "merger_metric"
+  | "merger_synergy"
+  | "merger_risk"
+  | "merger_compatibility"
+  | "competitor_comparison"
+  | "market_benchmark"
+  | "gap_analysis"
+  | "roadmap"
+  | "greeting"
+  | "help"
+  | "unrelated"
+  | "unsupported";
+
+export type AnswerClassification =
+  | "reported"
+  | "calculated"
+  | "estimated"
+  | "scenario"
+  | "unavailable"
+  | "informational"
+  | "refused";
+
+export type ChatConfidence = "high" | "medium" | "low" | "none";
+
+export type ChatEntityRef =
+  | "primary"
+  | "secondary"
+  | "market"
+  | "combined"
+  | "unknown";
+
+export interface ChatEvidence {
+  label: string;
+  value: number | null;
+  display_value: string | null;
+  unit: string | null;
+  metric_id: string | null;
+  period: string | null;
+  entity: ChatEntityRef | null;
+  entity_name: string | null;
+  source: string | null;
+  status: AnswerClassification;
+}
+
+export interface ChatCalculation {
+  formula: string;
+  result: number | null;
+  inputs: Record<string, number | null>;
+  explanation: string | null;
+}
+
+export interface ChatMessage {
+  role: ChatRole;
+  text: string;
+  timestamp: string;
+  intent: ChatIntent | null;
+  classification: AnswerClassification | null;
+  confidence: ChatConfidence | null;
+  evidence: ChatEvidence[];
+  calculations: ChatCalculation[];
+}
+
+export interface ChatContextInfo {
+  dataset_id: string | null;
+  dataset_name: string | null;
+  analysis_mode: string | null;
+  secondary_dataset_id: string | null;
+  secondary_dataset_name: string | null;
+  market_dataset_id: string | null;
+  market_dataset_name: string | null;
+}
+
+export interface ChatResponse {
+  session_id: string;
+  message_id: string;
+  answer: string;
+  intent: ChatIntent;
+  classification: AnswerClassification;
+  confidence: ChatConfidence;
+  evidence: ChatEvidence[];
+  calculations: ChatCalculation[];
+  context: ChatContextInfo | null;
+  suggested_followups: string[];
+  warnings: string[];
+  used_context: boolean;
+  generated_at: string;
+  version: string;
+}
+
+export interface ChatQueryPayload {
+  message: string;
+  session_id?: string | null;
+  dataset_id?: string | null;
+  analysis_mode?: string | null;
+  secondary_dataset_id?: string | null;
+  market_dataset_id?: string | null;
+  primary_display_name?: string | null;
+  secondary_display_name?: string | null;
+  market_display_name?: string | null;
+}
+
+export interface ChatSessionResponse {
+  session_id: string;
+  dataset_id: string | null;
+  analysis_mode: string | null;
+  secondary_dataset_id: string | null;
+  market_dataset_id: string | null;
+  messages: ChatMessage[];
+}
+
+export interface ChatSuggestionsResponse {
+  suggestions: string[];
+}
+
+export interface ChatSuggestionsPayload {
+  dataset_id: string;
+  analysis_mode?: string | null;
+  secondary_dataset_id?: string | null;
+  market_dataset_id?: string | null;
+  last_intent?: string | null;
+  limit?: number;
+}

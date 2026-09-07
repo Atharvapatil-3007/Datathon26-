@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
@@ -38,6 +38,7 @@ from app.analysis.benchmark_analyzer import run_benchmark_analysis
 from app.analysis.merger_analyzer import run_merger_analysis
 from app.analysis.self_analyzer import run_self_analysis
 from app.analysis.types import AnalysisMode
+from app.api.auth import get_optional_user_id
 from app.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -165,7 +166,10 @@ async def list_options() -> ModeCatalog:
     status_code=status.HTTP_200_OK,
     summary="Run Self Financial Analysis on a single Phase 2-profiled dataset",
 )
-async def analyze_self(payload: SelfAnalysisRequest) -> Dict[str, Any]:
+async def analyze_self(
+    payload: SelfAnalysisRequest,
+    user_id: Optional[str] = Depends(get_optional_user_id),
+) -> Dict[str, Any]:
     log.info(
         "analysis_self_requested",
         dataset_id=payload.dataset_id,
@@ -175,6 +179,7 @@ async def analyze_self(payload: SelfAnalysisRequest) -> Dict[str, Any]:
         run_self_analysis,
         payload.dataset_id,
         display_name=payload.display_name,
+        user_id=user_id,
     )
     return result.to_dict()
 
@@ -187,7 +192,10 @@ async def analyze_self(payload: SelfAnalysisRequest) -> Dict[str, Any]:
     status_code=status.HTTP_200_OK,
     summary="Run Merger / Partnership Analysis on two Phase 2-profiled datasets",
 )
-async def analyze_merger(payload: MergerAnalysisRequest) -> Dict[str, Any]:
+async def analyze_merger(
+    payload: MergerAnalysisRequest,
+    user_id: Optional[str] = Depends(get_optional_user_id),
+) -> Dict[str, Any]:
     log.info(
         "analysis_merger_requested",
         primary=payload.primary_dataset_id,
@@ -201,6 +209,7 @@ async def analyze_merger(payload: MergerAnalysisRequest) -> Dict[str, Any]:
         deal_type=payload.deal_type,
         primary_display_name=payload.primary_display_name,
         secondary_display_name=payload.secondary_display_name,
+        user_id=user_id,
     )
     return result.to_dict()
 
@@ -213,7 +222,10 @@ async def analyze_merger(payload: MergerAnalysisRequest) -> Dict[str, Any]:
     status_code=status.HTTP_200_OK,
     summary="Run Competitor & Market Benchmarking",
 )
-async def analyze_benchmark(payload: BenchmarkAnalysisRequest) -> Dict[str, Any]:
+async def analyze_benchmark(
+    payload: BenchmarkAnalysisRequest,
+    user_id: Optional[str] = Depends(get_optional_user_id),
+) -> Dict[str, Any]:
     log.info(
         "analysis_benchmark_requested",
         primary=payload.primary_dataset_id,
@@ -228,5 +240,6 @@ async def analyze_benchmark(payload: BenchmarkAnalysisRequest) -> Dict[str, Any]
         primary_display_name=payload.primary_display_name,
         competitor_display_name=payload.competitor_display_name,
         market_display_name=payload.market_display_name,
+        user_id=user_id,
     )
     return result.to_dict()

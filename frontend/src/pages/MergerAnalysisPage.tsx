@@ -1,16 +1,32 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import clsx from "clsx";
 import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Button } from "@/components/ui/Button";
 import { InlineDatasetInput } from "@/components/InlineDatasetInput";
-import { ErrorBanner, InfoBanner, LoadingState } from "@/components/ui/States";
+import { ErrorBanner, InfoBanner, ProgressLoader } from "@/components/ui/States";
 import { MergerAnalysisView } from "@/components/analysis/MergerAnalysisView";
 import { api, ApiError } from "@/lib/api";
+import { rememberAnalysis, rememberDataset } from "@/lib/assistantContext";
 import type { AnalysisResult, DatasetSummary } from "@/lib/types";
 
 const DEAL_TYPES = [
-  { value: "merger", label: "Merger" },
-  { value: "acquisition", label: "Acquisition" },
-  { value: "partnership", label: "Strategic Partnership" },
+  {
+    value: "merger",
+    label: "Merger",
+    hint: "Two organisations combine as equals",
+  },
+  {
+    value: "acquisition",
+    label: "Acquisition",
+    hint: "One company absorbs another",
+  },
+  {
+    value: "partnership",
+    label: "Strategic Partnership",
+    hint: "Joint operations, separate entities",
+  },
 ] as const;
 
 export default function MergerAnalysisPage() {
@@ -26,7 +42,13 @@ export default function MergerAnalysisPage() {
   useEffect(() => {
     if (!datasetId) return;
     const ctrl = new AbortController();
-    api.getDataset(datasetId, ctrl.signal).then(setDataset).catch(() => undefined);
+    api
+      .getDataset(datasetId, ctrl.signal)
+      .then((ds) => {
+        setDataset(ds);
+        rememberDataset(ds.id, ds.original_filename);
+      })
+      .catch(() => undefined);
     return () => ctrl.abort();
   }, [datasetId]);
 
@@ -44,6 +66,7 @@ export default function MergerAnalysisPage() {
         secondary_display_name: secondary.original_filename,
       });
       setResult(r);
+      rememberAnalysis("merger_partnership_analysis", r);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : (err as Error).message);
     } finally {
@@ -53,27 +76,32 @@ export default function MergerAnalysisPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to={`/datasets/${datasetId}/analysis`}
-        className="text-xs text-ink-muted hover:text-ink"
-      >
-        ← Analysis modes
-      </Link>
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Merger / Partnership Analysis
-        </h1>
-        <p className="text-sm text-ink-muted mt-1">
-          {dataset ? `${dataset.original_filename} combined with…` : "…"}
-        </p>
-      </div>
+      <PageHeader
+        crumbs={[
+          { label: "Datasets", to: "/datasets" },
+          {
+            label: dataset?.original_filename ?? "Dataset",
+            to: `/datasets/${datasetId}`,
+          },
+          { label: "Analysis", to: `/datasets/${datasetId}/analysis` },
+          { label: "Merger / partnership" },
+        ]}
+        eyebrow="Phase 3 · Merger analysis"
+        title="Merger & partnership analysis"
+        subtitle={
+          dataset
+            ? `${dataset.original_filename} combined with another company — projected as a hypothetical scenario, not a forecast.`
+            : "Combine two standalone datasets into a hypothetical scenario."
+        }
+      />
 
-      {!result && (
+      {!result && !running && (
         <Card
-          title="Configuration"
-          subtitle="Upload or pick the second company's dataset. It will be validated and profiled before combining."
+          eyebrow="Configuration"
+          title="Configure the combination"
+          subtitle="Upload or pick the second company's dataset. It will run through the same validation + profiling pipeline before combining."
         >
-          <div className="space-y-5">
+          <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <YourCompanyCard dataset={dataset} />
               <InlineDatasetInput
@@ -86,31 +114,35 @@ export default function MergerAnalysisPage() {
             </div>
             <div>
               <div className="label mb-2">Deal type</div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 {DEAL_TYPES.map((dt) => (
                   <button
                     key={dt.value}
                     onClick={() => setDealType(dt.value)}
-                    className={
-                      "px-3 py-1.5 text-sm rounded-md border transition-colors " +
-                      (dealType === dt.value
-                        ? "border-brand text-brand bg-brand-soft/60"
-                        : "border-line text-ink-muted hover:text-ink hover:bg-bg-hover")
-                    }
+                    className={clsx(
+                      "text-left rounded-lg border px-3.5 py-3 transition-colors",
+                      dealType === dt.value
+                        ? "border-brand-muted bg-brand-soft/60 shadow-insetTop"
+                        : "border-line bg-bg-soft/40 hover:border-brand-muted/40 hover:bg-bg-hover",
+                    )}
                   >
-                    {dt.label}
+                    <div className="text-sm font-medium text-ink">{dt.label}</div>
+                    <div className="text-[11px] text-ink-muted mt-0.5">
+                      {dt.hint}
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
             <div className="flex items-center justify-end gap-2">
-              <button
-                className="btn-primary"
+              <Button
+                variant="primary"
                 onClick={run}
-                disabled={!secondary || running}
+                disabled={!secondary}
+                loading={running}
               >
-                {running ? "Running…" : "Run merger analysis"}
-              </button>
+                Run merger analysis →
+              </Button>
             </div>
           </div>
         </Card>
@@ -119,15 +151,25 @@ export default function MergerAnalysisPage() {
       {error && <ErrorBanner title="Analysis failed" detail={error} />}
 
       {running && (
-        <Card>
-          <LoadingState message="Combining financials, computing synergies…" />
+        <>
+          <Card>
+            <ProgressLoader
+              title="Combining financials"
+              done={["Datasets validated", "Metrics extracted"]}
+              current="Computing synergies and combined scenario"
+              upcoming={["Score financial health", "Assess risks", "Generate insights"]}
+            />
+          </Card>
           <InfoBanner>
-            Combined values are hypothetical scenarios, not forecasts.
+            Combined values are hypothetical scenarios, not forecasts. Every
+            derived metric is labeled with its provenance.
           </InfoBanner>
-        </Card>
+        </>
       )}
 
-      {result && <MergerAnalysisView result={result} onReset={() => setResult(null)} />}
+      {result && (
+        <MergerAnalysisView result={result} onReset={() => setResult(null)} />
+      )}
     </div>
   );
 }
@@ -141,10 +183,15 @@ function YourCompanyCard({ dataset }: { dataset: DatasetSummary | null }) {
         <div className="text-[11px] text-good">Ready</div>
       </div>
       <div className="rounded-lg border border-good/40 bg-good/5 px-4 py-3">
-        <div className="text-sm font-medium text-ink truncate">
-          {dataset?.original_filename ?? "Loading…"}
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-good/20 text-good text-[10px]">
+            ✓
+          </span>
+          <div className="text-sm font-medium text-ink truncate">
+            {dataset?.original_filename ?? "Loading…"}
+          </div>
         </div>
-        <div className="text-[11px] text-ink-muted mt-0.5">
+        <div className="text-[11px] text-ink-muted mt-1.5">
           Already validated and profiled through Phase 1 + Phase 2.
         </div>
       </div>

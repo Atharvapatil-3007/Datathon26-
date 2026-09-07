@@ -110,6 +110,7 @@ def run_merger_analysis(
     deal_type: Optional[str] = None,
     primary_display_name: Optional[str] = None,
     secondary_display_name: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> AnalysisResult:
     started = time.perf_counter()
 
@@ -118,8 +119,8 @@ def run_merger_analysis(
             "Primary and secondary datasets must be different.",
         )
 
-    a_row, a_df = load_dataset_bundle(primary_dataset_id)
-    b_row, b_df = load_dataset_bundle(secondary_dataset_id)
+    a_row, a_df = load_dataset_bundle(primary_dataset_id, user_id=user_id)
+    b_row, b_df = load_dataset_bundle(secondary_dataset_id, user_id=user_id)
 
     a_profile = a_row.get("profile") or {}
     b_profile = b_row.get("profile") or {}
@@ -573,8 +574,34 @@ def _identify_risks(
 
 
 # ---------------------------------------------------------------------------
-# Attractiveness score
+# Attractiveness score (configurable)
 # ---------------------------------------------------------------------------
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass(frozen=True)
+class AttractivenessWeights:
+    """Coefficients for the merger Combination Attractiveness Score.
+
+    A finance SME can construct a custom instance to tune the model without
+    touching the module. The default coefficients below deliberately keep
+    combined health as the dominant driver and cap synergy / risk swings.
+    """
+
+    base_score: float = 50.0
+    health_delta_weight: float = 0.4        # how much (combined_health - 50) counts
+    revenue_uplift_multiplier: float = 0.12  # +N pts per 1 % of secondary/primary revenue
+    revenue_uplift_cap: float = 15.0
+    loss_making_penalty: float = 8.0        # per side that shows negative net profit
+    material_synergy_weight: float = 3.0    # per material synergy
+    material_synergy_cap: float = 10.0
+    high_risk_penalty: float = 6.0          # per HIGH-severity risk
+    high_risk_cap: float = 20.0
+
+
+DEFAULT_ATTRACTIVENESS_WEIGHTS = AttractivenessWeights()
+
+
 def _attractiveness_score(
     *,
     combined_health: HealthScore,
@@ -583,34 +610,34 @@ def _attractiveness_score(
     secondary_value_map: Dict[MetricId, float],
     synergies: List[SynergyItem],
     risks: List[RiskItem],
+    weights: AttractivenessWeights = DEFAULT_ATTRACTIVENESS_WEIGHTS,
 ) -> float:
     """0-100 score. Explainable + bounded. Never presented as advice."""
-    score = 50.0  # neutral starting point
+    score = weights.base_score
 
     # Health of the combined balance sheet is the biggest driver.
-    score += (combined_health.overall_score - 50) * 0.4  # up to \u00b120 pts
+    score += (combined_health.overall_score - 50) * weights.health_delta_weight
 
     # Revenue scale uplift for the primary company.
     rev_a = primary_value_map.get(MetricId.REVENUE)
     rev_b = secondary_value_map.get(MetricId.REVENUE)
     if rev_a and rev_b and rev_a > 0:
         uplift_pct = rev_b / rev_a * 100
-        # +12 pts for a 100 % uplift, capped
-        score += min(15.0, uplift_pct * 0.12)
+        score += min(weights.revenue_uplift_cap, uplift_pct * weights.revenue_uplift_multiplier)
 
     # Penalise if either company is loss-making.
     for vm in (primary_value_map, secondary_value_map):
         np = vm.get(MetricId.NET_PROFIT)
         if np is not None and np < 0:
-            score -= 8
+            score -= weights.loss_making_penalty
 
     # Reward material synergies.
     material = sum(1 for s in synergies if s.magnitude_hint == "material")
-    score += min(10.0, material * 3.0)
+    score += min(weights.material_synergy_cap, material * weights.material_synergy_weight)
 
     # Penalise high-severity risks.
     high_risks = sum(1 for r in risks if r.severity == Priority.HIGH)
-    score -= min(20.0, high_risks * 6.0)
+    score -= min(weights.high_risk_cap, high_risks * weights.high_risk_penalty)
 
     return max(0.0, min(100.0, score))
 

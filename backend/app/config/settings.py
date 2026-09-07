@@ -48,6 +48,9 @@ class Settings(BaseSettings):
 
     # ---- Local storage fallback ----
     local_storage_dir: str = Field(default="./.local_storage")
+    # When set explicitly (true/false) it wins; when left unset we derive
+    # the effective value from `app_env` (see `allow_local_fallback`).
+    local_fallback_enabled: Optional[bool] = Field(default=None)
 
     # ---- Derived helpers ----
     @property
@@ -75,6 +78,22 @@ class Settings(BaseSettings):
     @property
     def local_storage_path(self) -> Path:
         return Path(self.local_storage_dir).resolve()
+
+    @property
+    def allow_local_fallback(self) -> bool:
+        """Whether the SupabaseService may fall back to the local backend.
+
+        The fallback is convenient for local dev + tests but must not silently
+        engage in production. Precedence:
+
+        * ``LOCAL_FALLBACK_ENABLED=true`` explicitly opts in (any env).
+        * ``LOCAL_FALLBACK_ENABLED=false`` explicitly opts out (any env).
+        * Otherwise: allowed when ``APP_ENV`` is anything other than
+          ``"production"``.
+        """
+        if self.local_fallback_enabled is not None:
+            return self.local_fallback_enabled
+        return self.app_env.strip().lower() != "production"
 
     @field_validator("app_log_level")
     @classmethod

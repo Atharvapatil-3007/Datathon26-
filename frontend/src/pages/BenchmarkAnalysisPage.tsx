@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Button } from "@/components/ui/Button";
 import { InlineDatasetInput } from "@/components/InlineDatasetInput";
-import { ErrorBanner, LoadingState } from "@/components/ui/States";
+import { ErrorBanner, ProgressLoader } from "@/components/ui/States";
 import { BenchmarkAnalysisView } from "@/components/analysis/BenchmarkAnalysisView";
 import { api, ApiError } from "@/lib/api";
+import { rememberAnalysis, rememberDataset } from "@/lib/assistantContext";
 import type { AnalysisResult, DatasetSummary } from "@/lib/types";
 
 export default function BenchmarkAnalysisPage() {
@@ -19,7 +22,13 @@ export default function BenchmarkAnalysisPage() {
   useEffect(() => {
     if (!datasetId) return;
     const ctrl = new AbortController();
-    api.getDataset(datasetId, ctrl.signal).then(setDataset).catch(() => undefined);
+    api
+      .getDataset(datasetId, ctrl.signal)
+      .then((ds) => {
+        setDataset(ds);
+        rememberDataset(ds.id, ds.original_filename);
+      })
+      .catch(() => undefined);
     return () => ctrl.abort();
   }, [datasetId]);
 
@@ -38,6 +47,7 @@ export default function BenchmarkAnalysisPage() {
         market_display_name: market?.original_filename,
       });
       setResult(r);
+      rememberAnalysis("competitor_market_benchmark", r);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : (err as Error).message);
     } finally {
@@ -47,26 +57,30 @@ export default function BenchmarkAnalysisPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to={`/datasets/${datasetId}/analysis`}
-        className="text-xs text-ink-muted hover:text-ink"
-      >
-        ← Analysis modes
-      </Link>
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Competitor & Market Benchmarking
-        </h1>
-        <p className="text-sm text-ink-muted mt-1">
-          Compare {dataset?.original_filename ?? "your company"} against a competitor
-          and optionally an industry / market reference.
-        </p>
-      </div>
+      <PageHeader
+        crumbs={[
+          { label: "Datasets", to: "/datasets" },
+          {
+            label: dataset?.original_filename ?? "Dataset",
+            to: `/datasets/${datasetId}`,
+          },
+          { label: "Analysis", to: `/datasets/${datasetId}/analysis` },
+          { label: "Competitor benchmark" },
+        ]}
+        eyebrow="Phase 3 · Competitor & market benchmark"
+        title="Competitor & market benchmarking"
+        subtitle={
+          dataset
+            ? `Compare ${dataset.original_filename} against a competitor and an optional market/industry reference.`
+            : "Compare your company against a competitor and market benchmark."
+        }
+      />
 
-      {!result && (
+      {!result && !running && (
         <Card
-          title="Configuration"
-          subtitle="Upload or pick the competitor's dataset. A market/industry benchmark is optional but enriches the comparison."
+          eyebrow="Configuration"
+          title="Configure the comparison"
+          subtitle="A competitor dataset is required. A market/industry benchmark is optional but enriches the comparison."
         >
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <YourCompanyCard dataset={dataset} />
@@ -86,14 +100,15 @@ export default function BenchmarkAnalysisPage() {
               optional
             />
           </div>
-          <div className="mt-5 flex items-center justify-end gap-2">
-            <button
-              className="btn-primary"
+          <div className="mt-6 flex items-center justify-end gap-2">
+            <Button
+              variant="primary"
               onClick={run}
-              disabled={!competitor || running}
+              disabled={!competitor}
+              loading={running}
             >
-              {running ? "Running…" : "Run benchmark analysis"}
-            </button>
+              Run benchmark analysis →
+            </Button>
           </div>
         </Card>
       )}
@@ -102,16 +117,22 @@ export default function BenchmarkAnalysisPage() {
 
       {running && (
         <Card>
-          <LoadingState message="Comparing metrics and computing gaps…" />
+          <ProgressLoader
+            title="Comparing companies"
+            done={["Datasets validated", "Aligning metric definitions"]}
+            current="Computing gaps and priority matrix"
+            upcoming={["Identify strengths & weaknesses", "Generate action plan"]}
+          />
         </Card>
       )}
 
-      {result && <BenchmarkAnalysisView result={result} onReset={() => setResult(null)} />}
+      {result && (
+        <BenchmarkAnalysisView result={result} onReset={() => setResult(null)} />
+      )}
     </div>
   );
 }
 
-/** Read-only summary of the primary dataset — it's already been ingested. */
 function YourCompanyCard({ dataset }: { dataset: DatasetSummary | null }) {
   return (
     <div>
@@ -120,10 +141,15 @@ function YourCompanyCard({ dataset }: { dataset: DatasetSummary | null }) {
         <div className="text-[11px] text-good">Ready</div>
       </div>
       <div className="rounded-lg border border-good/40 bg-good/5 px-4 py-3">
-        <div className="text-sm font-medium text-ink truncate">
-          {dataset?.original_filename ?? "Loading…"}
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-good/20 text-good text-[10px]">
+            ✓
+          </span>
+          <div className="text-sm font-medium text-ink truncate">
+            {dataset?.original_filename ?? "Loading…"}
+          </div>
         </div>
-        <div className="text-[11px] text-ink-muted mt-0.5">
+        <div className="text-[11px] text-ink-muted mt-1.5">
           Already validated and profiled through Phase 1 + Phase 2.
         </div>
       </div>

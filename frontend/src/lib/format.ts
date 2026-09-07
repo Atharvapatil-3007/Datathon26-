@@ -53,6 +53,51 @@ export function fmtPercent(ratio: unknown, maxFraction = 2): string {
     `${(n * 100).toFixed(maxFraction)}%`;
 }
 
+/**
+ * Human-friendly compact currency for financial numbers.
+ *
+ * We do NOT force a currency symbol because the underlying datasets may be
+ * in any currency (or none — some rows are counts). Callers can pass a
+ * symbol explicitly when they know it.
+ */
+export function fmtCompactCurrency(v: unknown, symbol = ""): string {
+  const n = safeNumber(v);
+  if (n === null) return "—";
+  const abs = Math.abs(n);
+  let scaled: string;
+  if (abs >= 1_000_000_000) scaled = `${(n / 1_000_000_000).toFixed(2)}B`;
+  else if (abs >= 1_000_000) scaled = `${(n / 1_000_000).toFixed(2)}M`;
+  else if (abs >= 1_000) scaled = `${(n / 1_000).toFixed(1)}K`;
+  else scaled = decimalFormatter.format(n);
+  return symbol ? `${symbol}${scaled}` : scaled;
+}
+
+/**
+ * Compact percentage from a raw percentage value (e.g. 12.4 -> "12.4%").
+ * Distinct from fmtPercent which expects a 0..1 ratio.
+ */
+export function fmtPercentValue(v: unknown, maxFraction = 1): string {
+  const n = safeNumber(v);
+  if (n === null) return "—";
+  return `${n.toFixed(maxFraction)}%`;
+}
+
+/** Signed change: adds an explicit `+` for positive numbers. */
+export function fmtSigned(v: unknown, suffix = ""): string {
+  const n = safeNumber(v);
+  if (n === null) return "—";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${decimalFormatter.format(n)}${suffix}`;
+}
+
+/** Signed percent-value (e.g. 12.4 -> "+12.4%"). */
+export function fmtSignedPercent(v: unknown, maxFraction = 1): string {
+  const n = safeNumber(v);
+  if (n === null) return "—";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(maxFraction)}%`;
+}
+
 export function fmtBytes(bytes: unknown): string {
   const n = safeNumber(bytes);
   if (n === null || n < 0) return "—";

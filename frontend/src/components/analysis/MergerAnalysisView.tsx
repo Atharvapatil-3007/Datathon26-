@@ -1,16 +1,17 @@
 import clsx from "clsx";
 import { Card } from "@/components/ui/Card";
-import { PriorityBadge, MetricStatusBadge } from "@/components/ui/StatusBadges";
+import { Button } from "@/components/ui/Button";
+import { InsightCard } from "@/components/ui/InsightCard";
+import { MetricStatusBadge } from "@/components/ui/StatusBadges";
 import {
   formatMetricValue,
   ConfidenceFooter,
   HealthCard,
   InsightsCard,
-  Section,
 } from "./_shared";
 import type {
   AnalysisResult,
-  RiskItem,
+  LabeledMetric,
   SynergyItem,
 } from "@/lib/types";
 
@@ -65,48 +66,51 @@ export function MergerAnalysisView({
     .map((w) => w.match(/Combination Attractiveness Score:\s*([\d.]+)/))
     .find(Boolean)?.[1];
 
+  const primaryName = result.primary_entity?.display_name ?? "Company A";
+  const secondaryName = result.secondary_entity?.display_name ?? "Company B";
+
   return (
     <div className="space-y-6">
-      <Section
-        title="Executive summary"
+      {/* Executive summary */}
+      <Card
+        eyebrow="Executive summary"
+        title="Combination narrative"
         action={
-          <button className="btn" onClick={onReset}>
+          <Button onClick={onReset} size="sm">
             Change inputs
-          </button>
+          </Button>
         }
       >
-        <p className="text-sm text-ink-muted leading-relaxed">{result.summary_text}</p>
-        {attractiveness && (
-          <div className="mt-4 flex items-center gap-3">
-            <div className="rounded-lg border border-brand-muted bg-brand-soft/40 px-4 py-3">
-              <div className="label">Combination Attractiveness</div>
-              <div className="mt-0.5 text-2xl font-semibold text-brand">
-                {parseFloat(attractiveness).toFixed(1)}
-                <span className="text-sm text-ink-muted"> / 100</span>
-              </div>
-            </div>
-            <p className="text-xs text-ink-faint max-w-md">
-              Analytical support based on standalone data — not a forecast, not advice.
-            </p>
-          </div>
-        )}
-      </Section>
+        <p className="text-sm text-ink-muted leading-relaxed text-pretty">
+          {result.summary_text}
+        </p>
+      </Card>
 
+      {/* A + B → Combined hero */}
+      <CombinationHero
+        primaryName={primaryName}
+        secondaryName={secondaryName}
+        attractiveness={attractiveness}
+        combinedLabel={result.combined_scenario?.label}
+      />
+
+      {/* Comparison table */}
       {result.combined_scenario && (
         <Card
+          eyebrow="Scenario table"
           title={result.combined_scenario.label}
-          subtitle={`${result.primary_entity?.display_name} + ${result.secondary_entity?.display_name}`}
+          subtitle={`Hypothetical combination of ${primaryName} + ${secondaryName}. Values labeled to preserve provenance.`}
           bodyClassName="p-0"
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-bg-soft/60 border-b border-line">
-                <tr className="text-left text-[11px] uppercase tracking-wider text-ink-faint">
-                  <th className="px-4 py-2 font-medium">Metric</th>
-                  <th className="px-4 py-2 font-medium">Primary</th>
-                  <th className="px-4 py-2 font-medium">Secondary</th>
-                  <th className="px-4 py-2 font-medium">Combined</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
+              <thead className="bg-bg-soft/70 border-b border-line">
+                <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-ink-faint">
+                  <th className="px-4 py-2.5 font-medium">Metric</th>
+                  <th className="px-4 py-2.5 font-medium text-right">{primaryName}</th>
+                  <th className="px-4 py-2.5 font-medium text-right">{secondaryName}</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Combined</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -118,13 +122,13 @@ export function MergerAnalysisView({
                       <td className="px-4 py-2.5 text-ink font-medium">
                         {anchor.display_name}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-ink-muted">
+                      <td className="px-4 py-2.5 num text-ink-muted">
                         {p ? formatMetricValue(p.value, p.unit) : "—"}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-ink-muted">
+                      <td className="px-4 py-2.5 num text-ink-muted">
                         {s ? formatMetricValue(s.value, s.unit) : "—"}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-ink font-semibold">
+                      <td className="px-4 py-2.5 num text-ink font-semibold">
                         {c ? formatMetricValue(c.value, c.unit) : "—"}
                       </td>
                       <td className="px-4 py-2.5">
@@ -138,10 +142,10 @@ export function MergerAnalysisView({
           </div>
           {result.combined_scenario.caveats.length > 0 && (
             <div className="px-5 py-3 border-t border-line bg-bg-soft/30">
-              <div className="label mb-2">Caveats</div>
+              <div className="label mb-2">Scenario caveats</div>
               <ul className="space-y-1 text-xs text-ink-muted">
                 {result.combined_scenario.caveats.map((c) => (
-                  <li key={c}>• {c}</li>
+                  <li key={c}>· {c}</li>
                 ))}
               </ul>
             </div>
@@ -150,7 +154,11 @@ export function MergerAnalysisView({
       )}
 
       {result.financial_health && (
-        <HealthCard health={result.financial_health} title="Combined financial health" />
+        <HealthCard
+          health={result.financial_health}
+          title="Combined financial health"
+          subtitle="Scored against the same rubric used for self-analysis, applied to the scenario data."
+        />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -158,7 +166,10 @@ export function MergerAnalysisView({
         <RisksCard risks={result.risks} />
       </div>
 
-      <InsightsCard insights={result.insights} recommendations={result.recommendations} />
+      <InsightsCard
+        insights={result.insights}
+        recommendations={result.recommendations}
+      />
 
       {result.confidence && (
         <ConfidenceFooter
@@ -171,89 +182,172 @@ export function MergerAnalysisView({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Synergies + Risks cards
-// ---------------------------------------------------------------------------
+/* -------------------------------------------------------------------------
+ * Combination hero
+ * ------------------------------------------------------------------------- */
+function CombinationHero({
+  primaryName,
+  secondaryName,
+  attractiveness,
+  combinedLabel,
+}: {
+  primaryName: string;
+  secondaryName: string;
+  attractiveness?: string;
+  combinedLabel?: string;
+}) {
+  const score = attractiveness ? parseFloat(attractiveness) : null;
+  return (
+    <Card raised className="hero-bg">
+      <div className="flex flex-col lg:flex-row items-stretch gap-5">
+        {/* A + B → C visual */}
+        <div className="flex-1 grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
+          <CompanyTag name={primaryName} tone="brand" />
+          <div className="flex flex-col items-center gap-1">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-brand-muted bg-brand-soft text-brand text-lg font-semibold">
+              +
+            </span>
+          </div>
+          <CompanyTag name={secondaryName} tone="accent" />
+        </div>
+
+        <div className="hidden lg:flex items-center">
+          <span className="text-ink-faint text-xl">→</span>
+        </div>
+
+        {/* Combined + attractiveness */}
+        <div className="flex-1 rounded-xl border border-brand-muted/50 bg-brand-soft/30 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="eyebrow">Combined scenario</div>
+              <div className="mt-1 text-lg font-semibold text-ink text-balance">
+                {combinedLabel ?? `${primaryName} + ${secondaryName}`}
+              </div>
+              <div className="mt-1.5 text-xs text-ink-muted">
+                Hypothetical combination — not a forecast.
+              </div>
+            </div>
+            {score !== null && (
+              <div className="text-right">
+                <div className="eyebrow">Attractiveness</div>
+                <div className="mt-1 text-3xl font-semibold text-brand tabular-nums">
+                  {score.toFixed(1)}
+                  <span className="text-sm text-ink-muted"> / 100</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function CompanyTag({ name, tone }: { name: string; tone: "brand" | "accent" }) {
+  const styles =
+    tone === "brand"
+      ? "border-brand-muted/50 bg-brand-soft/40 text-brand"
+      : "border-accent/40 bg-accent-soft/60 text-accent";
+  return (
+    <div
+      className={clsx(
+        "rounded-xl border p-4 min-h-[76px] flex flex-col justify-center",
+        styles,
+      )}
+    >
+      <div className="text-[10px] uppercase tracking-[0.14em] font-semibold opacity-80">
+        Company
+      </div>
+      <div className="mt-1 text-sm font-semibold text-ink truncate">{name}</div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+ * Synergies + risks
+ * ------------------------------------------------------------------------- */
 function SynergiesCard({ synergies }: { synergies: SynergyItem[] }) {
   const revenue = synergies.filter((s) => s.kind === "revenue");
   const cost = synergies.filter((s) => s.kind === "cost");
+  const other = synergies.filter(
+    (s) => s.kind !== "revenue" && s.kind !== "cost",
+  );
 
   return (
-    <Card title="Potential synergies" subtitle="Only fired when the underlying data supports them.">
+    <Card
+      eyebrow="Value creation"
+      title="Potential synergies"
+      subtitle="Only fired when the underlying data supports them."
+    >
       {synergies.length === 0 ? (
         <p className="text-sm text-ink-muted">
-          No quantifiable synergies could be identified.
+          No quantifiable synergies could be identified from the current data.
         </p>
       ) : (
         <div className="space-y-4">
-          {revenue.length > 0 && (
-            <SynergyList title="Revenue synergies" items={revenue} tone="good" />
-          )}
-          {cost.length > 0 && (
-            <SynergyList title="Cost synergies" items={cost} tone="info" />
-          )}
+          {revenue.length > 0 && <SynergyList title="Revenue synergies" items={revenue} />}
+          {cost.length > 0 && <SynergyList title="Cost synergies" items={cost} />}
+          {other.length > 0 && <SynergyList title="Other synergies" items={other} />}
         </div>
       )}
     </Card>
   );
 }
 
-function SynergyList({
-  title,
-  items,
-  tone,
-}: {
-  title: string;
-  items: SynergyItem[];
-  tone: "good" | "info";
-}) {
-  const toneCls = tone === "good" ? "text-good" : "text-brand";
+function SynergyList({ title, items }: { title: string; items: SynergyItem[] }) {
   return (
     <div>
-      <div className={clsx("label mb-2", toneCls)}>{title}</div>
-      <ul className="space-y-2">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-good font-semibold mb-2">
+        {title}
+      </div>
+      <div className="space-y-2">
         {items.map((s) => (
-          <li
+          <InsightCard
             key={s.title}
-            className="rounded-md border border-line bg-bg-soft/40 p-3 text-sm"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-medium text-ink">{s.title}</span>
-              {s.magnitude_hint && (
-                <span className="text-[11px] text-ink-faint capitalize font-mono">
-                  {s.magnitude_hint.replace(/_/g, " ")}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-ink-muted mt-1 leading-snug">{s.description}</p>
-          </li>
+            kind="opportunity"
+            title={
+              <div className="flex items-center justify-between gap-3">
+                <span>{s.title}</span>
+                {s.magnitude_hint && (
+                  <span className="text-[10px] text-ink-faint capitalize font-mono">
+                    {s.magnitude_hint.replace(/_/g, " ")}
+                  </span>
+                )}
+              </div>
+            }
+            body={s.description}
+          />
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
 
-function RisksCard({ risks }: { risks: RiskItem[] }) {
+function RisksCard({ risks }: { risks: AnalysisResult["risks"] }) {
   return (
-    <Card title="Risks" subtitle="Data-supported concerns plus general considerations.">
+    <Card
+      eyebrow="What could go wrong"
+      title="Combination risks"
+      subtitle="Data-supported concerns plus general considerations."
+    >
       {risks.length === 0 ? (
         <p className="text-sm text-ink-muted">No material risks flagged.</p>
       ) : (
-        <ul className="space-y-2">
+        <div className="space-y-2">
           {risks.map((r) => (
-            <li
+            <InsightCard
               key={r.title}
-              className="rounded-md border border-line bg-bg-soft/40 p-3 text-sm"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-ink">{r.title}</span>
-                <PriorityBadge value={r.severity} />
-              </div>
-              <p className="text-xs text-ink-muted mt-1 leading-snug">{r.description}</p>
-            </li>
+              kind="risk"
+              title={r.title}
+              body={r.description}
+              priority={r.severity}
+            />
           ))}
-        </ul>
+        </div>
       )}
     </Card>
   );
 }
+
+// Kept exported for potential future use.
+export type { LabeledMetric };

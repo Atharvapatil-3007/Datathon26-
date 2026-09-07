@@ -1,8 +1,21 @@
+/* -------------------------------------------------------------------------
+   Web fonts
+   @import MUST precede other statements per CSS spec. Inter drives all UI
+   text; JetBrains Mono is used selectively for financial numerics.
+   ------------------------------------------------------------------------- */
+@import url("https://rsms.me/inter/inter.css");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-family: "Inter var", "Inter", ui-sans-serif, system-ui, sans-serif;
+    color-scheme: dark;
+  }
+
   html,
   body,
   #root {
@@ -10,42 +23,204 @@
   }
 
   body {
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+    background: theme(colors.bg.DEFAULT);
+    color: theme(colors.ink.DEFAULT);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   ::selection {
-    background: rgba(110, 168, 255, 0.35);
+    background: rgba(122, 168, 255, 0.35);
     color: #ffffff;
   }
 
-  /* Table row hover */
+  /* Table row hover — kept for compatibility with existing dashboard tables */
   tbody tr:hover {
-    background-color: rgb(26 37 67 / 0.5);
+    background-color: rgb(24 37 65 / 0.55);
+  }
+
+  /* Focus rings — visible only on keyboard focus */
+  :focus-visible {
+    outline: 2px solid theme(colors.brand.DEFAULT);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Custom scrollbar for a modern feel without stealing attention */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 196, 0.15);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 196, 0.28);
+    background-clip: content-box;
   }
 }
 
 @layer components {
+  /* ---------- Cards ---------- */
   .card {
     @apply bg-bg-card border border-line rounded-xl shadow-card;
   }
+  .card-hover {
+    @apply transition-all;
+  }
+  .card-hover:hover {
+    @apply border-brand-muted/60 -translate-y-[1px];
+    box-shadow:
+      0 6px 24px -8px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+  .card-raised {
+    @apply bg-bg-card border border-line rounded-xl shadow-card;
+    background-image: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.02),
+      rgba(255, 255, 255, 0) 60%
+    );
+  }
+
+  /* ---------- Buttons ---------- */
   .btn {
-    @apply inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-bg-hover transition-colors disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm text-ink hover:bg-bg-hover transition-colors disabled:opacity-50 disabled:pointer-events-none;
   }
   .btn-primary {
     @apply btn border-brand-muted bg-brand-soft text-ink hover:bg-brand-muted/40;
   }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:text-ink hover:bg-bg-hover transition-colors;
+  }
+  .btn-danger {
+    @apply btn border-bad/40 text-bad hover:bg-bad/10;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-[13px];
+  }
+  .btn-xs {
+    @apply px-2 py-1 text-xs rounded-md;
+  }
+
+  /* ---------- Chips / pills ---------- */
   .badge {
     @apply inline-flex items-center rounded-md border border-line bg-bg-soft px-2 py-0.5 text-[11px] font-medium text-ink-muted;
   }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-line bg-bg-soft/70 px-2.5 py-0.5 text-[11px] font-medium text-ink-muted;
+  }
+  .kbd {
+    @apply inline-flex items-center rounded border border-line bg-bg-soft px-1.5 py-0.5 font-mono text-[10px] text-ink-muted;
+  }
+
+  /* ---------- Typography ---------- */
   .label {
-    @apply text-xs uppercase tracking-wider text-ink-faint font-medium;
+    @apply text-[11px] uppercase tracking-[0.08em] text-ink-faint font-medium;
+  }
+  .eyebrow {
+    @apply text-[10px] uppercase tracking-[0.14em] text-brand font-semibold;
   }
   .kpi-value {
-    @apply text-3xl font-semibold text-ink tracking-tight;
+    @apply text-3xl font-semibold text-ink tracking-tight tabular-nums;
+  }
+  .metric-value {
+    @apply text-2xl font-semibold text-ink tracking-tight tabular-nums;
+  }
+  .display-heading {
+    @apply text-3xl md:text-4xl font-semibold tracking-[-0.02em] text-ink;
+  }
+  .heading-1 {
+    @apply text-2xl font-semibold tracking-tight text-ink;
+  }
+  .heading-2 {
+    @apply text-lg font-semibold text-ink;
+  }
+  .heading-3 {
+    @apply text-sm font-semibold text-ink;
+  }
+
+  /* ---------- Inputs ---------- */
+  .input {
+    @apply bg-bg-soft border border-line rounded-md px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:border-brand-muted focus:ring-1 focus:ring-brand-muted/40;
+  }
+
+  /* ---------- Brand mark ---------- */
+  .brand-mark {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-soft border border-brand-muted;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+    background-image: linear-gradient(135deg, rgba(122, 168, 255, 0.25), rgba(167, 139, 250, 0.15));
+  }
+  .brand-mark svg {
+    @apply h-5 w-5 text-brand;
+  }
+
+  /* ---------- Section header (used by SectionHeader.tsx) ---------- */
+  .section-title {
+    @apply text-sm font-semibold text-ink;
+  }
+  .section-subtitle {
+    @apply text-xs text-ink-muted mt-0.5;
+  }
+
+  /* ---------- Skeleton ---------- */
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-bg-hover;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full;
+    animation: shimmer 1.6s infinite;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.05),
+      transparent
+    );
+  }
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* ---------- Hero backdrop for landing surfaces ---------- */
+  .hero-bg {
+    background-image: theme(backgroundImage.hero-gradient);
+  }
+
+  /* ---------- Data table cell alignments ---------- */
+  .num {
+    @apply font-mono tabular-nums text-right;
   }
 }
 
 @layer utilities {
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  /* Hairline divider — thin, no shadow */
+  .hr-line {
+    @apply border-t border-line;
+  }
 }

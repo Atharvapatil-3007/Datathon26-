@@ -42,6 +42,8 @@ from app.analysis.types import (
     LabeledMetric,
     MetricId,
     MetricStatus,
+    Priority,
+    RiskItem,
 )
 from app.utils.logging import get_logger
 
@@ -66,11 +68,12 @@ def run_self_analysis(
     dataset_id: str,
     *,
     display_name: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> AnalysisResult:
     """Public entrypoint used by the API layer."""
     started = time.perf_counter()
 
-    row, df = load_dataset_bundle(dataset_id)
+    row, df = load_dataset_bundle(dataset_id, user_id=user_id)
     profile: Dict[str, Any] = row.get("profile") or {}
     filename = display_name or row.get("original_filename") or dataset_id
 
@@ -116,6 +119,13 @@ def run_self_analysis(
         notes=extraction.warnings,
     )
 
+    # Convert plain-string risks from the insight bundle into typed RiskItems
+    # so they surface in the standard `risks` channel rather than warnings.
+    risk_items = [
+        RiskItem(severity=Priority.MEDIUM, title=r, description=r)
+        for r in bundle.risks
+    ]
+
     result = AnalysisResult(
         mode=AnalysisMode.SELF_ANALYSIS,
         primary_entity=entity,
@@ -127,9 +137,9 @@ def run_self_analysis(
         strengths=bundle.strengths,
         weaknesses=bundle.weaknesses,
         opportunities=bundle.opportunities,
-        risks=[],       # risk *items* live in the bundle; for self mode the strings are enough
+        risks=risk_items,
         summary_text=_summary_text(filename, extraction, ratios, health),
-        warnings=extraction.warnings + list(bundle.risks),  # risks surface here for UI
+        warnings=list(extraction.warnings),  # data-quality warnings only
         confidence=_build_confidence(extraction, df, trends),
     )
 

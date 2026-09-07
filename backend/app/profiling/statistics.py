@@ -21,16 +21,28 @@ _PERCENTILES = [0.10, 0.25, 0.50, 0.75, 0.90]
 # ---------------------------------------------------------------------------
 # Public entrypoints — one per column class
 # ---------------------------------------------------------------------------
-def numerical_stats(series: pd.Series) -> Dict[str, Any]:
-    """Descriptive statistics for a numerical column."""
-    non_null = pd.to_numeric(series, errors="coerce").dropna()
+def numerical_stats(
+    series: pd.Series,
+    date_series: Optional[pd.Series] = None,
+) -> Dict[str, Any]:
+    """Descriptive statistics for a numerical column.
+
+    When ``date_series`` is provided (Phase 2 profile time), the value from
+    the *most recent* row is emitted as ``latest_value``. Phase 3 uses this
+    to avoid the ``max``-based ESTIMATED fallback for balance-sheet metrics
+    (F-05 in the audit).
+    """
+    numeric = pd.to_numeric(series, errors="coerce")
+    non_null = numeric.dropna()
     if non_null.empty:
         return {"count": 0}
 
     q10, q25, q50, q75, q90 = non_null.quantile(_PERCENTILES).tolist()
     iqr = q75 - q25
 
-    return {
+    latest_value = _latest_by_date(numeric, date_series)
+
+    stats: Dict[str, Any] = {
         "count": int(non_null.count()),
         "mean": _safe_float(non_null.mean()),
         "median": _safe_float(q50),
@@ -49,6 +61,28 @@ def numerical_stats(series: pd.Series) -> Dict[str, Any]:
         },
         "sum": _safe_float(non_null.sum()),
     }
+    if latest_value is not None:
+        stats["latest_value"] = latest_value
+    return stats
+
+
+def _latest_by_date(
+    numeric: pd.Series, date_series: Optional[pd.Series]
+) -> Optional[float]:
+    """Return the numeric value in the row with the maximum date, or None."""
+    if date_series is None:
+        return None
+    try:
+        dates = pd.to_datetime(date_series, errors="coerce")
+        aligned = pd.concat([dates, numeric], axis=1)
+        aligned.columns = ["_date", "_value"]
+        aligned = aligned.dropna(subset=["_date", "_value"])
+        if aligned.empty:
+            return None
+        latest_idx = aligned["_date"].idxmax()
+        return _safe_float(aligned.at[latest_idx, "_value"])
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def categorical_stats(series: pd.Series) -> Dict[str, Any]:

@@ -9,6 +9,11 @@ import type {
   AnalysisOptionsResponse,
   AnalysisResult,
   ApiErrorPayload,
+  ChatQueryPayload,
+  ChatResponse,
+  ChatSessionResponse,
+  ChatSuggestionsPayload,
+  ChatSuggestionsResponse,
   DatasetSummary,
   HealthResponse,
   IngestionResponse,
@@ -227,6 +232,52 @@ export const api = {
   ): Promise<AnalysisResult> {
     return request<AnalysisResult>(
       "/api/v1/analysis/benchmark",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      signal,
+    );
+  },
+
+  // -------------------------------------------------------------------------
+  // Chatbot - Dataset Intelligence Assistant
+  // -------------------------------------------------------------------------
+  chatQuery(payload: ChatQueryPayload, signal?: AbortSignal): Promise<ChatResponse> {
+    return request<ChatResponse>(
+      "/api/v1/chat/query",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      signal,
+    );
+  },
+
+  chatSession(sessionId: string, signal?: AbortSignal): Promise<ChatSessionResponse> {
+    return request<ChatSessionResponse>(
+      `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`,
+      { method: "GET" },
+      signal,
+    );
+  },
+
+  chatClearSession(sessionId: string, signal?: AbortSignal): Promise<void> {
+    return request<void>(
+      `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`,
+      { method: "DELETE" },
+      signal,
+    );
+  },
+
+  chatSuggestions(
+    payload: ChatSuggestionsPayload,
+    signal?: AbortSignal,
+  ): Promise<ChatSuggestionsResponse> {
+    return request<ChatSuggestionsResponse>(
+      "/api/v1/chat/suggestions",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

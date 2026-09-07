@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.api.analysis import router_analysis
+from app.api.chat import router_chat
 from app.api.ingestion import router_datasets, router_ingestion
 from app.config.settings import get_settings
 from app.database.supabase import get_supabase_service
@@ -67,7 +68,9 @@ def _build_app() -> FastAPI:
             "duplicates / cardinality, statistics, distributions, correlations, "
             "quality score.\n\n"
             "Phase 3 — Financial Intelligence: Self Analysis, "
-            "Merger / Partnership Analysis, Competitor & Market Benchmarking."
+            "Merger / Partnership Analysis, Competitor & Market Benchmarking.\n\n"
+            "Chatbot — Dataset Intelligence Assistant grounded in the uploaded "
+            "dataset, its Phase 2 profile and its Phase 3 analysis results."
         ),
         docs_url="/docs",
         redoc_url="/redoc",
@@ -88,6 +91,7 @@ def _build_app() -> FastAPI:
     app.include_router(router_ingestion, prefix="/api/v1")
     app.include_router(router_datasets, prefix="/api/v1")
     app.include_router(router_analysis, prefix="/api/v1")
+    app.include_router(router_chat, prefix="/api/v1")
 
     # ---- Health -------------------------------------------------------------
     @app.get("/", tags=["meta"])
@@ -99,6 +103,7 @@ def _build_app() -> FastAPI:
                 "1 - Data Ingestion",
                 "2 - Data Understanding",
                 "3 - Financial Intelligence",
+                "Chatbot - Dataset Intelligence Assistant",
             ],
             "docs": "/docs",
         }

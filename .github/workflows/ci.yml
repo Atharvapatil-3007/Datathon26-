@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs when new commits land on the same branch / PR.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Backend: install deps, run pytest with the same command developers use
+  # locally. Uses pip's built-in cache so the second run on the same lockfile
+  # is fast.
+  # --------------------------------------------------------------------------
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        # No .env is present in CI, so the local-fallback path engages and
+        # every test writes to a tmp directory (matches the local dev flow).
+        env:
+          APP_LOG_LEVEL: WARNING
+        run: python -m pytest -q --tb=short
+
+  # --------------------------------------------------------------------------
+  # Frontend: type-check + Vite production build. Also runs the Vitest suite
+  # if one is defined (F-02); the step is a no-op when no `test` script exists.
+  # --------------------------------------------------------------------------
+  frontend:
+    name: Frontend (build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        # `npm ci` requires a lockfile; fall back to `npm install` if the
+        # lockfile has not been committed yet.
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Run unit tests (if configured)
+        run: |
+          if npm run | grep -qE "^  test$"; then
+            npm test --if-present -- --run
+          else
+            echo "No 'test' script defined \u2014 skipping."
+          fi
+
+      - name: Type-check + build
+        run: npm run build

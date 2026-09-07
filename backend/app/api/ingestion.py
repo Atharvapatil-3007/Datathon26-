@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
+from app.api.auth import get_optional_user_id
 from app.config.settings import Settings, get_settings
 from app.ingestion.exceptions import DatasetNotFoundError, FileTooLargeError, IngestionError
 from app.ingestion.manager import IngestionManager, get_ingestion_manager
@@ -126,7 +127,7 @@ async def upload_dataset(
     delimiter: Optional[str] = Form(default=None, description="Override CSV delimiter"),
     encoding: Optional[str] = Form(default=None, description="Override CSV encoding"),
     member: Optional[str] = Form(default=None, description="ZIP member filename"),
-    user_id: Optional[str] = Form(default=None, description="Auth-ready user identifier"),
+    user_id: Optional[str] = Depends(get_optional_user_id),
     settings: Settings = Depends(get_settings),
     manager: IngestionManager = Depends(get_ingestion_manager),
 ) -> IngestionResponse:
@@ -179,7 +180,7 @@ async def upload_dataset(
 )
 async def ingest_sql(
     payload: SQLIngestRequest,
-    user_id: Optional[str] = Query(default=None),
+    user_id: Optional[str] = Depends(get_optional_user_id),
     manager: IngestionManager = Depends(get_ingestion_manager),
 ) -> IngestionResponse:
     if not payload.query and not payload.table_name:
@@ -210,9 +211,12 @@ async def ingest_sql(
 async def list_datasets(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    user_id: Optional[str] = Depends(get_optional_user_id),
     manager: IngestionManager = Depends(get_ingestion_manager),
 ) -> List[DatasetSummary]:
-    rows = await run_in_threadpool(manager.list_datasets, limit=limit, offset=offset)
+    rows = await run_in_threadpool(
+        manager.list_datasets, limit=limit, offset=offset, user_id=user_id
+    )
     return [DatasetSummary.model_validate(r) for r in rows]
 
 
@@ -223,9 +227,12 @@ async def list_datasets(
 )
 async def get_dataset(
     dataset_id: str,
+    user_id: Optional[str] = Depends(get_optional_user_id),
     manager: IngestionManager = Depends(get_ingestion_manager),
 ) -> DatasetSummary:
-    row = await run_in_threadpool(manager.get_dataset_summary, dataset_id)
+    row = await run_in_threadpool(
+        manager.get_dataset_summary, dataset_id, user_id=user_id
+    )
     if not row:
         raise DatasetNotFoundError(f"Dataset '{dataset_id}' not found")
     return DatasetSummary.model_validate(row)
@@ -238,9 +245,10 @@ async def get_dataset(
 )
 async def delete_dataset(
     dataset_id: str,
+    user_id: Optional[str] = Depends(get_optional_user_id),
     manager: IngestionManager = Depends(get_ingestion_manager),
 ):
-    await run_in_threadpool(manager.delete_dataset, dataset_id)
+    await run_in_threadpool(manager.delete_dataset, dataset_id, user_id=user_id)
     return None
 
 
@@ -254,9 +262,12 @@ async def delete_dataset(
 )
 async def get_profile(
     dataset_id: str,
+    user_id: Optional[str] = Depends(get_optional_user_id),
     manager: IngestionManager = Depends(get_ingestion_manager),
 ) -> ProfileResponse:
-    row = await run_in_threadpool(manager.get_dataset_summary, dataset_id)
+    row = await run_in_threadpool(
+        manager.get_dataset_summary, dataset_id, user_id=user_id
+    )
     if row is None:
         raise DatasetNotFoundError(f"Dataset '{dataset_id}' not found")
     return ProfileResponse(
@@ -274,9 +285,12 @@ async def get_profile(
 )
 async def reprofile(
     dataset_id: str,
+    user_id: Optional[str] = Depends(get_optional_user_id),
     manager: IngestionManager = Depends(get_ingestion_manager),
 ) -> ProfileResponse:
-    payload = await run_in_threadpool(manager.reprofile_dataset, dataset_id)
+    payload = await run_in_threadpool(
+        manager.reprofile_dataset, dataset_id, user_id=user_id
+    )
     return ProfileResponse(
         dataset_id=dataset_id,
         profile=payload,

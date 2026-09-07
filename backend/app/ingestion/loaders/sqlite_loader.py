@@ -2,7 +2,8 @@
 
 * Lists all user tables from `sqlite_master`
 * Loads one selected table (default: first user table by row count)
-* Uses parameterized identifiers to avoid SQL injection
+* Delegates identifier quoting to SQLAlchemy's SQLite dialect so we get
+  dialect-correct escape rules instead of hand-rolled string surgery.
 """
 
 from __future__ import annotations
@@ -12,10 +13,20 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+from sqlalchemy.dialects.sqlite import dialect as _sqlite_dialect
 
 from app.ingestion.base import DataLoader, LoadSource
 from app.ingestion.dataset import DatasetObject, FileFormat
 from app.ingestion.exceptions import CorruptedFileError, FileParsingError, InvalidDatasetError
+
+
+# One preparer instance is enough \u2014 it is stateless.
+_SQLITE_PREPARER = _sqlite_dialect().identifier_preparer
+
+
+def _quote_ident(name: str) -> str:
+    """Return a fully-quoted SQLite identifier ready to splice into a statement."""
+    return _SQLITE_PREPARER.quote(name)
 
 
 class SQLiteLoader(DataLoader):
@@ -92,8 +103,9 @@ def _pick_largest_table(conn: sqlite3.Connection, tables: List[str]) -> str:
     best_count = -1
     for t in tables:
         try:
-            # SQLite doesn't support parameter binding for identifiers; quote manually.
-            cur = conn.execute(f'SELECT COUNT(*) FROM "{_escape_ident(t)}"')
+            # SQLite doesn't support parameter binding for identifiers; use
+            # the dialect preparer for correct dialect-aware quoting.
+            cur = conn.execute(f"SELECT COUNT(*) FROM {_quote_ident(t)}")
             count = int(cur.fetchone()[0])
         except sqlite3.Error:
             count = 0
@@ -105,11 +117,6 @@ def _pick_largest_table(conn: sqlite3.Connection, tables: List[str]) -> str:
 
 def _read_table(conn: sqlite3.Connection, table: str) -> pd.DataFrame:
     try:
-        return pd.read_sql_query(f'SELECT * FROM "{_escape_ident(table)}"', conn)
+        return pd.read_sql_query(f"SELECT * FROM {_quote_ident(table)}", conn)
     except Exception as exc:  # noqa: BLE001
         raise FileParsingError(f"Failed to read table '{table}': {exc}") from exc
-
-
-def _escape_ident(name: str) -> str:
-    """Escape a SQLite identifier by doubling embedded quotes."""
-    return name.replace('"', '""')

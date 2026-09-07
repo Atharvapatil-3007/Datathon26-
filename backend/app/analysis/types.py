@@ -391,7 +391,13 @@ class AnalysisResult:
     financial_health: Optional[HealthScore] = None
     combined_scenario: Optional[CombinedScenario] = None
 
-    metrics: List[LabeledMetric] = field(default_factory=list)      # convenience: primary metrics
+    # Convenience: primary entity's base metrics. Mode notes:
+    #   * self_analysis          -> populated
+    #   * competitor_market_benchmark -> populated
+    #   * merger_partnership_analysis -> EMPTY. Both companies' metrics live
+    #     under primary_entity.metrics and secondary_entity.metrics; the
+    #     combined view is under combined_scenario.metrics.
+    metrics: List[LabeledMetric] = field(default_factory=list)
     ratios: List[LabeledMetric] = field(default_factory=list)
     comparisons: List[ComparisonRow] = field(default_factory=list)
     gaps: List[GapItem] = field(default_factory=list)

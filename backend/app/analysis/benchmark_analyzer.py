@@ -119,6 +119,7 @@ def run_benchmark_analysis(
     primary_display_name: Optional[str] = None,
     competitor_display_name: Optional[str] = None,
     market_display_name: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> AnalysisResult:
     started = time.perf_counter()
 
@@ -127,11 +128,11 @@ def run_benchmark_analysis(
             "Primary and competitor datasets must be different.",
         )
 
-    a_row, a_df = load_dataset_bundle(primary_dataset_id)
-    b_row, b_df = load_dataset_bundle(competitor_dataset_id)
+    a_row, a_df = load_dataset_bundle(primary_dataset_id, user_id=user_id)
+    b_row, b_df = load_dataset_bundle(competitor_dataset_id, user_id=user_id)
     m_row, m_df = (None, None)
     if market_dataset_id:
-        m_row, m_df = load_dataset_bundle(market_dataset_id)
+        m_row, m_df = load_dataset_bundle(market_dataset_id, user_id=user_id)
 
     a_profile = a_row.get("profile") or {}
     b_profile = b_row.get("profile") or {}

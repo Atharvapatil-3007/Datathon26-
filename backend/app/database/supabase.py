@@ -57,10 +57,21 @@ class SupabaseService:
             self._backend: _Backend = _SupabaseBackend(self.settings)
             log.info("supabase_backend_initialized", bucket=self.settings.supabase_storage_bucket)
         else:
+            if not self.settings.allow_local_fallback:
+                # F-12: refuse to boot with an unconfigured backend in
+                # production. Better to fail fast than silently store data on
+                # a container's local disk that vanishes on redeploy.
+                raise DatabaseConnectionError(
+                    "Supabase is not configured and LOCAL_FALLBACK_ENABLED is "
+                    "false (or APP_ENV=production). Set SUPABASE_URL + "
+                    "SUPABASE_SERVICE_ROLE_KEY, or explicitly opt in with "
+                    "LOCAL_FALLBACK_ENABLED=true for non-production use."
+                )
             self._backend = _LocalBackend(self.settings)
             log.warning(
                 "supabase_not_configured_using_local_fallback",
                 storage_dir=str(self.settings.local_storage_path),
+                app_env=self.settings.app_env,
             )
 
     # ---- Storage --------------------------------------------------------
@@ -188,6 +199,15 @@ class SupabaseService:
                 f"Failed to download dataset from storage: {exc}"
             ) from exc
 
+    def download_dataset_to_file(self, storage_path: str, dest_path: Path) -> None:
+        """Stream a stored object to a local file (F-07 chunked download)."""
+        try:
+            self._backend.download_to_file(storage_path, Path(dest_path))
+        except Exception as exc:  # noqa: BLE001
+            raise StorageUploadError(
+                f"Failed to download dataset from storage: {exc}"
+            ) from exc
+
     def update_dataset_metadata(
         self,
         dataset_object: DatasetObject,
@@ -215,18 +235,42 @@ class SupabaseService:
                 f"Failed to persist metadata for dataset {dataset_object.dataset_id}: {exc}"
             ) from exc
 
-    def get_dataset(self, dataset_id: str) -> Dict[str, Any]:
+    def get_dataset(
+        self, dataset_id: str, *, user_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Fetch a single dataset row.
+
+        When ``user_id`` is provided (F-01: app-layer isolation) the caller
+        is asserting ownership. A row belonging to a different user is
+        reported as not-found so we never leak the existence of another
+        user's dataset. This is the foundation used by every read / delete
+        / analysis path; upgrading to JWT-derived identity later is a
+        drop-in change at the API dependency layer.
+        """
         row = self._backend.get_dataset(dataset_id)
         if row is None:
             raise DatasetNotFoundError(f"Dataset '{dataset_id}' not found")
+        if user_id is not None and _owner_of(row) != user_id:
+            raise DatasetNotFoundError(f"Dataset '{dataset_id}' not found")
         return row
 
-    def list_datasets(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
-        return self._backend.list_datasets(limit=limit, offset=offset)
+    def list_datasets(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        *,
+        user_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        rows = self._backend.list_datasets(limit=limit, offset=offset, user_id=user_id)
+        return rows
 
-    def delete_dataset(self, dataset_id: str) -> None:
+    def delete_dataset(
+        self, dataset_id: str, *, user_id: Optional[str] = None
+    ) -> None:
         row = self._backend.get_dataset(dataset_id)
         if row is None:
+            raise DatasetNotFoundError(f"Dataset '{dataset_id}' not found")
+        if user_id is not None and _owner_of(row) != user_id:
             raise DatasetNotFoundError(f"Dataset '{dataset_id}' not found")
         storage_path = row.get("storage_path")
         if storage_path:
@@ -257,6 +301,14 @@ class _Backend:
     def download(self, storage_path: str) -> bytes:
         raise NotImplementedError
 
+    def download_to_file(self, storage_path: str, dest_path: Path) -> None:
+        """Stream a stored object to ``dest_path`` in fixed-size chunks.
+
+        Default fallback loops over ``download()`` (backend-specific
+        overrides should perform a real streaming read).
+        """
+        raise NotImplementedError
+
     def delete(self, storage_path: str) -> None:
         raise NotImplementedError
 
@@ -270,7 +322,9 @@ class _Backend:
     def get_dataset(self, dataset_id: str) -> Optional[Dict[str, Any]]:
         raise NotImplementedError
 
-    def list_datasets(self, *, limit: int, offset: int) -> List[Dict[str, Any]]:
+    def list_datasets(
+        self, *, limit: int, offset: int, user_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         raise NotImplementedError
 
     def delete_dataset(self, dataset_id: str) -> None:
@@ -348,18 +402,46 @@ class _SupabaseBackend(_Backend):
 
     def upload(self, local_path: Path, storage_path: str, content_type: str) -> None:
         self._ensure_bucket()
-        with open(local_path, "rb") as f:
-            data = f.read()
-        # Supabase Python client: upload throws on error
+        # F-07: hand the Path directly so storage3 opens the file and the
+        # underlying httpx multipart encoder streams chunks over the wire.
+        # This keeps peak memory bounded regardless of upload size.
         self.client.storage.from_(self.bucket).upload(
             path=storage_path,
-            file=data,
+            file=local_path,
             file_options={"content-type": content_type, "upsert": "true"},
         )
 
     def download(self, storage_path: str) -> bytes:
-        # Supabase client returns bytes directly
+        # Kept for callers who genuinely want the bytes (small profiles).
         return self.client.storage.from_(self.bucket).download(storage_path)
+
+    def download_to_file(self, storage_path: str, dest_path: Path) -> None:
+        """Stream a stored object straight to ``dest_path`` (F-07).
+
+        Uses ``httpx.stream`` against the signed URL so we never hold the
+        whole payload in memory. Chunk size is 1 MiB.
+        """
+        try:
+            import httpx  # bundled with the supabase client
+        except ImportError as exc:  # pragma: no cover
+            raise DatabaseConnectionError("httpx is required for streaming download") from exc
+
+        signed = self.client.storage.from_(self.bucket).create_signed_url(
+            storage_path, expires_in=300
+        )
+        signed_url = signed.get("signedURL") or signed.get("signed_url") or signed.get("signedUrl")
+        if not signed_url:
+            # Fall back to non-streaming path if the response shape changes.
+            dest_path.write_bytes(self.download(storage_path))
+            return
+
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        with httpx.stream("GET", signed_url, timeout=60.0) as response:
+            response.raise_for_status()
+            with open(dest_path, "wb") as out:
+                for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                    if chunk:
+                        out.write(chunk)
 
     def delete(self, storage_path: str) -> None:
         self.client.storage.from_(self.bucket).remove([storage_path])
@@ -382,14 +464,17 @@ class _SupabaseBackend(_Backend):
         rows = getattr(resp, "data", None) or []
         return rows[0] if rows else None
 
-    def list_datasets(self, *, limit: int, offset: int) -> List[Dict[str, Any]]:
-        resp = (
+    def list_datasets(
+        self, *, limit: int, offset: int, user_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        q = (
             self.client.table(_DATASETS_TABLE)
             .select("*")
             .order("created_at", desc=True)
-            .range(offset, offset + limit - 1)
-            .execute()
         )
+        if user_id is not None:
+            q = q.eq("user_id", user_id)
+        resp = q.range(offset, offset + limit - 1).execute()
         return list(getattr(resp, "data", None) or [])
 
     def delete_dataset(self, dataset_id: str) -> None:
@@ -422,6 +507,14 @@ class _LocalBackend(_Backend):
         if not target.is_file():
             raise StorageUploadError(f"Storage object not found: {storage_path}")
         return target.read_bytes()
+
+    def download_to_file(self, storage_path: str, dest_path: Path) -> None:
+        target = (self.storage_root / storage_path).resolve()
+        if not target.is_file():
+            raise StorageUploadError(f"Storage object not found: {storage_path}")
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        # shutil.copyfile uses a 64 KB buffer under the hood \u2014 chunked I/O by design.
+        shutil.copyfile(target, dest_path)
 
     def delete(self, storage_path: str) -> None:
         target = (self.storage_root / storage_path).resolve()
@@ -464,9 +557,13 @@ class _LocalBackend(_Backend):
                     return dict(r)
         return None
 
-    def list_datasets(self, *, limit: int, offset: int) -> List[Dict[str, Any]]:
+    def list_datasets(
+        self, *, limit: int, offset: int, user_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         with self._lock:
             rows = self._read_all()
+        if user_id is not None:
+            rows = [r for r in rows if _owner_of(r) == user_id]
         rows.sort(key=lambda r: r.get("created_at", ""), reverse=True)
         return rows[offset : offset + limit]
 
@@ -482,6 +579,11 @@ class _LocalBackend(_Backend):
 # ===========================================================================
 # Utilities
 # ===========================================================================
+def _owner_of(row: Dict[str, Any]) -> Optional[str]:
+    """Return the user_id stored on a dataset row (None if not tagged)."""
+    return row.get("user_id")
+
+
 _INVALID_FILENAME_CHARS = str.maketrans({c: "_" for c in '<>:"/\\|?*\n\r\t'})
 
 

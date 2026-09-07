@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Button } from "@/components/ui/Button";
 import { EmptyState, ErrorBanner, LoadingState } from "@/components/ui/States";
 import { StatusBadge } from "@/components/ui/Badges";
 import { api, ApiError } from "@/lib/api";
 import { fmtBytes, fmtInt, fmtRelative } from "@/lib/format";
+import { rememberDataset } from "@/lib/assistantContext";
 import type { DatasetSummary } from "@/lib/types";
 
 export default function DatasetsPage() {
@@ -41,19 +44,42 @@ export default function DatasetsPage() {
     }
   }
 
+  const total = rows?.length ?? 0;
+  const validated = rows?.filter((r) => r.status === "validated").length ?? 0;
+  const failed = rows?.filter((r) => r.status === "failed").length ?? 0;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Datasets</h1>
-          <p className="text-sm text-ink-muted mt-1">
-            Every dataset you've ingested, newest first.
-          </p>
-        </div>
-        <Link to="/upload" className="btn-primary">
-          + Upload new
-        </Link>
-      </div>
+      <PageHeader
+        eyebrow="Workspace"
+        title="Datasets"
+        subtitle="Every dataset you've ingested — profiled, ready for analysis, sorted newest first."
+        actions={
+          <Link to="/upload">
+            <Button variant="primary">+ Upload dataset</Button>
+          </Link>
+        }
+        meta={
+          rows && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="chip">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand" />
+                {fmtInt(total)} total
+              </span>
+              <span className="chip text-good">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-good" />
+                {fmtInt(validated)} validated
+              </span>
+              {failed > 0 && (
+                <span className="chip text-bad">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-bad" />
+                  {fmtInt(failed)} failed
+                </span>
+              )}
+            </div>
+          )
+        }
+      />
 
       {error && <ErrorBanner title="Could not load datasets" detail={error} />}
 
@@ -63,48 +89,69 @@ export default function DatasetsPage() {
         ) : rows.length === 0 ? (
           <EmptyState
             title="No datasets yet"
-            hint="Head to Upload to ingest your first CSV or Excel file."
+            hint="Ingest your first CSV, Excel, JSON or Parquet file to unlock profiling and analysis."
             action={
-              <Link to="/upload" className="btn-primary">
-                Upload a dataset
+              <Link to="/upload">
+                <Button variant="primary">Upload a dataset</Button>
               </Link>
+            }
+            icon={
+              <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6">
+                <path
+                  d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+              </svg>
             }
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-bg-soft border-b border-line">
-                <tr className="text-left text-[11px] uppercase tracking-wider text-ink-faint">
-                  <th className="px-5 py-3 font-medium">Filename</th>
+                <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-ink-faint">
+                  <th className="px-5 py-3 font-medium">Dataset</th>
                   <th className="px-5 py-3 font-medium">Format</th>
-                  <th className="px-5 py-3 font-medium">Rows</th>
-                  <th className="px-5 py-3 font-medium">Cols</th>
-                  <th className="px-5 py-3 font-medium">Size</th>
+                  <th className="px-5 py-3 font-medium text-right">Rows</th>
+                  <th className="px-5 py-3 font-medium text-right">Cols</th>
+                  <th className="px-5 py-3 font-medium text-right">Size</th>
                   <th className="px-5 py-3 font-medium">Status</th>
                   <th className="px-5 py-3 font-medium">Ingested</th>
-                  <th className="px-5 py-3" />
+                  <th className="px-5 py-3" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="cursor-pointer"
-                    onClick={() => navigate(`/datasets/${row.id}`)}
+                    className="cursor-pointer transition-colors"
+                    onClick={() => {
+                      rememberDataset(row.id, row.original_filename);
+                      navigate(`/datasets/${row.id}`);
+                    }}
                   >
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-ink truncate max-w-[280px]">
-                          {row.original_filename}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="h-8 w-8 rounded-md bg-bg-soft border border-line inline-flex items-center justify-center text-ink-muted shrink-0">
+                          <IconDoc />
                         </span>
+                        <div className="min-w-0">
+                          <div className="font-medium text-ink truncate max-w-[300px]">
+                            {row.original_filename}
+                          </div>
+                          <div className="text-[11px] text-ink-faint font-mono truncate max-w-[300px]">
+                            {row.id}
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-ink-muted uppercase text-[11px] font-medium">
+                    <td className="px-5 py-3 text-ink-muted uppercase text-[11px] font-medium tracking-wider">
                       {row.file_format}
                     </td>
-                    <td className="px-5 py-3 text-ink-muted">{fmtInt(row.row_count)}</td>
-                    <td className="px-5 py-3 text-ink-muted">{fmtInt(row.column_count)}</td>
-                    <td className="px-5 py-3 text-ink-muted">{fmtBytes(row.file_size)}</td>
+                    <td className="px-5 py-3 text-ink num">{fmtInt(row.row_count)}</td>
+                    <td className="px-5 py-3 text-ink num">{fmtInt(row.column_count)}</td>
+                    <td className="px-5 py-3 text-ink-muted num">{fmtBytes(row.file_size)}</td>
                     <td className="px-5 py-3">
                       <StatusBadge value={row.status} />
                     </td>
@@ -119,6 +166,7 @@ export default function DatasetsPage() {
                         }}
                         className="text-xs text-ink-faint hover:text-bad transition-colors disabled:opacity-40"
                         disabled={deletingId === row.id}
+                        aria-label={`Delete ${row.original_filename}`}
                       >
                         {deletingId === row.id ? "Deleting…" : "Delete"}
                       </button>
@@ -131,5 +179,19 @@ export default function DatasetsPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+function IconDoc() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+      <path
+        d="M14 3v4a1 1 0 0 0 1 1h4M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

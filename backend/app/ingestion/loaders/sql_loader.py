@@ -78,7 +78,10 @@ class SQLLoader(DataLoader):
                             details={"available_tables": tables[:50]},
                         )
                     limit_clause = f" LIMIT {int(row_limit)}" if row_limit else ""
-                    stmt = text(f'SELECT * FROM "{_escape(table_name)}"{limit_clause}')
+                    # Ask SQLAlchemy to quote the identifier using this
+                    # engine's dialect (handles PG/MySQL/MSSQL variants).
+                    quoted = engine.dialect.identifier_preparer.quote(table_name)
+                    stmt = text(f"SELECT * FROM {quoted}{limit_clause}")
                     df = pd.read_sql_query(stmt, conn)
                     selected = table_name
         except InvalidDatasetError:
@@ -124,10 +127,6 @@ def _safe_inspect_tables(engine) -> List[str]:
 def _wrap_limit(query: str, limit: int) -> str:
     q = query.strip().rstrip(";")
     return f"SELECT * FROM ({q}) AS _sub LIMIT {int(limit)}"
-
-
-def _escape(name: str) -> str:
-    return name.replace('"', '""')
 
 
 def _sanitize(exc: Exception) -> str:

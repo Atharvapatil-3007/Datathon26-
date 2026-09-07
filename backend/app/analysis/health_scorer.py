@@ -109,18 +109,43 @@ def _growth(trends: Dict[MetricId, TrendResult]) -> Optional[float]:
 
 
 # ---------------------------------------------------------------------------
+# Weights (configurable)
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class HealthWeights:
+    """Dimension weights for the overall health score.
+
+    A finance SME can build a custom instance and pass it into ``score_health``
+    without touching the module. The default weights below were chosen so
+    profitability dominates and cannot be silently outweighed by leverage.
+    """
+
+    profitability: float = 0.30
+    liquidity: float = 0.20
+    leverage: float = 0.20
+    efficiency: float = 0.15
+    growth: float = 0.15
+
+    def ordered(self) -> "list[tuple[str, float]]":
+        return [
+            ("profitability", self.profitability),
+            ("liquidity", self.liquidity),
+            ("leverage", self.leverage),
+            ("efficiency", self.efficiency),
+            ("growth", self.growth),
+        ]
+
+
+DEFAULT_HEALTH_WEIGHTS = HealthWeights()
+
+
+# ---------------------------------------------------------------------------
 # Public entrypoint
 # ---------------------------------------------------------------------------
-_DIMENSION_ORDER = [
-    ("profitability", 0.30),
-    ("liquidity", 0.20),
-    ("leverage", 0.20),
-    ("efficiency", 0.15),
-    ("growth", 0.15),
-]
-
-
-def score_health(inputs: HealthInputs) -> HealthScore:
+def score_health(
+    inputs: HealthInputs,
+    weights: HealthWeights = DEFAULT_HEALTH_WEIGHTS,
+) -> HealthScore:
     ratios_by_id = {r.metric_id: r for r in inputs.ratios}
 
     dims: Dict[str, Optional[float]] = {
@@ -132,7 +157,7 @@ def score_health(inputs: HealthInputs) -> HealthScore:
     }
 
     # Weighted average over the dimensions that were actually scored.
-    scored = [(name, dims[name], w) for name, w in _DIMENSION_ORDER if dims[name] is not None]
+    scored = [(name, dims[name], w) for name, w in weights.ordered() if dims[name] is not None]
     if not scored:
         return HealthScore(
             overall_score=0.0,

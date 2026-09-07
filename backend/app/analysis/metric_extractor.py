@@ -241,16 +241,26 @@ def _build_metric_from_column(
 
     elif metric_id in _POINT_IN_TIME_METRICS and shape == "periodic":
         # Balance sheet / stock metric with periodic data: pick the latest value.
-        latest = _extract_latest_value(df, column_profile["name"], date_columns)
-        if latest is not None:
-            value = latest
-            notes.append("Latest value across periods.")
+        # Preferred source order:
+        #   1. `statistics.latest_value` \u2014 written by Phase 2 when a date
+        #      column was detected (F-05, exact).
+        #   2. live DataFrame lookup via _extract_latest_value.
+        #   3. `max` fallback (marked ESTIMATED).
+        profile_latest = _finite(stats.get("latest_value"))
+        if profile_latest is not None:
+            value = profile_latest
+            notes.append("Latest value across periods (from Phase 2 profile).")
         else:
-            value = _finite(stats.get("max"))
-            status = MetricStatus.ESTIMATED
-            notes.append(
-                "Latest-by-date unavailable; used max as an approximation."
-            )
+            latest = _extract_latest_value(df, column_profile["name"], date_columns)
+            if latest is not None:
+                value = latest
+                notes.append("Latest value across periods.")
+            else:
+                value = _finite(stats.get("max"))
+                status = MetricStatus.ESTIMATED
+                notes.append(
+                    "Latest-by-date unavailable; used max as an approximation."
+                )
 
     elif metric_id in _INCOME_METRICS and shape == "periodic":
         # Flow metric across multiple periods: sum is the natural roll-up.
