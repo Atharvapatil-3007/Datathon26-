@@ -107,7 +107,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="dashboard-canvas space-y-6">
       <PageHeader
         crumbs={[
           { label: "Datasets", to: "/datasets" },
@@ -233,7 +233,7 @@ function IntelligenceHero({
   const cols = dataset.column_count ?? profile?.overview.columns ?? null;
 
   return (
-    <Card raised className="hero-bg" bodyClassName="p-0">
+    <Card raised className="hero-bg dashboard-fingerprint" bodyClassName="p-0">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-px bg-line/50 rounded-xl overflow-hidden">
         <HeroStat label="Rows" value={fmtInt(rows)} sub={fmtBytes(dataset.file_size)} />
         <HeroStat
@@ -284,7 +284,10 @@ function HeroStat({
   return (
     <div className="bg-bg-card px-4 py-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="label">{label}</div>
+        <div className="flex items-center gap-1.5">
+          <MetricGlyph label={label} />
+          <div className="label">{label}</div>
+        </div>
         {badge}
       </div>
       <div className="mt-1 text-2xl font-semibold text-ink tabular-nums tracking-tight">
@@ -292,5 +295,26 @@ function HeroStat({
       </div>
       {sub && <div className="text-[11px] text-ink-faint mt-1 truncate">{sub}</div>}
     </div>
+  );
+}
+
+function MetricGlyph({ label }: { label: string }) {
+  const glyph =
+    label === "Rows" ? "M5 19V9m4 10V5m5 14v-7m5 7V3" :
+    label === "Columns" ? "M5 5h14M5 12h14M5 19h14" :
+    label === "Missing" ? "M12 4v8m0 4v.01M5 20h14a1.5 1.5 0 0 0 1.3-2.25l-7-12a1.5 1.5 0 0 0-2.6 0l-7 12A1.5 1.5 0 0 0 5 20Z" :
+    label === "Quality" ? "m5 12 4 4L19 6" :
+    "M5 6h14v12H5zM8 10h3m-3 4h6";
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 text-brand/80" aria-hidden>
+      <path
+        d={glyph}
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

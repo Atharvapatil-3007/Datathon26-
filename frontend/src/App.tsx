@@ -1,5 +1,6 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Shell from "./components/Shell";
+import LoginPage from "./pages/LoginPage";
 import UploadPage from "./pages/UploadPage";
 import DatasetsPage from "./pages/DatasetsPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -10,6 +11,17 @@ import BenchmarkAnalysisPage from "./pages/BenchmarkAnalysisPage";
 import AssistantPage from "./pages/AssistantPage";
 
 export default function App() {
+  const location = useLocation();
+  const authenticated = window.localStorage.getItem("finsight.authenticated") === "true";
+
+  if (!authenticated && location.pathname !== "/login") {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (location.pathname === "/login") {
+    return <LoginPage />;
+  }
+
   return (
     <Shell>
       <Routes>

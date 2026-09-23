@@ -86,7 +86,7 @@ export default {
       },
       fontFamily: {
         sans: [
-          "Inter",
+          "Fira Sans",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
@@ -95,13 +95,13 @@ export default {
           "sans-serif",
         ],
         display: [
-          "Inter",
+          "Fira Sans",
           "ui-sans-serif",
           "system-ui",
           "sans-serif",
         ],
         mono: [
-          "JetBrains Mono",
+          "Fira Code",
           "SFMono-Regular",
           "Menlo",
           "Monaco",

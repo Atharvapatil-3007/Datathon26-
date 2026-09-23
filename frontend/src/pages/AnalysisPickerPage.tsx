@@ -86,7 +86,7 @@ export default function AnalysisPickerPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="analytical-canvas space-y-8">
       <PageHeader
         crumbs={[
           { label: "Datasets", to: "/datasets" },

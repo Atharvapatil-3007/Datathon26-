@@ -55,7 +55,7 @@ export default function Shell({ children }: PropsWithChildren) {
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <TopBar onMenu={() => setOpen((v) => !v)} health={health} />
         <main className="flex-1">
-          <div className="max-w-[1400px] mx-auto px-5 md:px-8 py-8">{children}</div>
+          <div className="main-surface max-w-[1400px] mx-auto px-5 md:px-8 py-8">{children}</div>
         </main>
         <footer className="border-t border-line py-4 text-center text-[11px] text-ink-faint">
           {BRAND.footer}
@@ -97,15 +97,23 @@ function BrandLogo() {
           <stop offset="1" stopColor="#a78bfa" />
         </linearGradient>
       </defs>
+      <circle cx="16" cy="16" r="11" fill="none" stroke="url(#brandGrad)" strokeWidth={1.5} opacity="0.45" />
       <path
-        d="M6 22 L12 14 L17 18 L26 8"
+        d="M16 7v18M7 16h18"
+        stroke="url(#brandGrad)"
+        strokeWidth={1.25}
+        strokeLinecap="round"
+        opacity="0.7"
+      />
+      <path
+        d="M10.5 20.5 14.2 16l3 2.2 5-7"
         fill="none"
         stroke="url(#brandGrad)"
-        strokeWidth={2.6}
+        strokeWidth={2.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="26" cy="8" r="2.4" fill="url(#brandGrad)" />
+      <circle cx="22.2" cy="11.2" r="2.1" fill="#eef2ff" stroke="url(#brandGrad)" strokeWidth={1.4} />
     </svg>
   );
 }
@@ -142,7 +150,12 @@ function SidebarNav() {
     : [];
 
   return (
-    <nav className="flex-1 overflow-y-auto py-3">
+    <nav className="sidebar-command flex-1 overflow-y-auto py-3" aria-label="Command center">
+      <div className="sidebar-command-title px-4 pb-2">
+        <span className="sidebar-command-pulse" aria-hidden />
+        <span>Command center</span>
+        <span className="ml-auto font-mono text-[9px] text-ink-faint">LIVE</span>
+      </div>
       <NavGroup label="Workspace" items={main} />
       {contextual.length > 0 && (
         <NavGroup label="Active dataset" items={contextual} className="mt-4" />
